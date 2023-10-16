@@ -1,7 +1,8 @@
-const uuid = require('uuid');
+const { v1 } = require('uuid');
 const User = require('../models/userModel');
 const evalidator = require("email-validator");
 const { roleValue } = require("../utils/userRoles");
+const bcrypt = require('bcrypt');
 
 exports.register = async (req, res) => {
     const { name, email, password, passwordConfirm, role, nationalID } = req.body
@@ -24,7 +25,7 @@ exports.register = async (req, res) => {
         return res.status(400).json({
             status: "error",
             message: "Please provide a valid role(ADMIN,PATIENT)"
-        })
+        });
     }
 
     if (nationalID.length > 100) {
@@ -41,36 +42,84 @@ exports.register = async (req, res) => {
         });
     }
 
-    if (evalidator.validate(email) == true) {
+    if (evalidator.validate(email) == false) {
         return res.status(400).json({
             status: "error",
             message: "Please provide a valid email!"
-        })
-    }
-
-    const newUser = {
-        id: uuid(),
-        name,
-        email,
-        nationalID,
-        role: role ? role : "USER",
+        });
     }
 
     try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newUser = {
+            id: v1(),
+            name,
+            email,
+            password: hashedPassword,
+            nationalID,
+            role: role ? role : "USER",
+        }
+    
+
         await User.create(newUser, () => {
-            console.log(`User ${name} successfully created`);
-        }).then(user => 
-            res.status(200).json({
+            console.log(`User '${name}' successfully created`);
+
+            return res.status(201).json({
                 status: "success",
                 message: "User successfully created!",
-                data: user
-            })
-        )
+                data: newUser
+            });
+        })
+
     } catch (err) {
-        res.status(401).json({
+        res.status(500).json({
             status: "error",
             message: "User not created",
             error: err.message,
         })
     }
 } 
+
+exports.login = async (req, res, next) => {
+    const { email, password } = req.body
+
+    if (!email || !password) {
+        return res.status(400).json({
+            status: "error",
+            message: "User name or password missing!"
+        });
+    }
+
+    try {
+        const user = await User.findByEmail(email, () => {
+            console.log(`User with ${email} found!`);
+        });
+
+        if (!user) {
+            return res.status(400).json({
+                status: "error",
+                message: "User not found!"
+            });
+        } else {
+            bcrypt.compare(password, user.password).then(() => {
+                return res.status(200).json({
+                    status: "success",
+                    message: "Login successful!",
+                    user
+                });
+            }).catch(() => {
+                return res.status(400).json({
+                    status: "error",
+                    message: "Login failure!",
+                });
+            })
+        }
+    } catch (err) {
+        return res.status(500).json({
+            status: "error",
+            message: "Internal server error!",
+            error: err.message
+        });
+    }
+}
