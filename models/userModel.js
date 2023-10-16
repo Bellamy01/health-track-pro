@@ -9,6 +9,9 @@ exports.create = (user, callback) => {
     [user.id, user.name, user.email, user.password, user.nationalID, user.role], callback);    
 }
 
+exports.findByEmail = (email, callback) => {
+    db.get('SELECT * FROM users WHERE email = ?', [email], callback);
+}
 
 exports.getOne = (id, callback) => {
     db.get('SELECT * FROM users WHERE id = ?', [id], callback);
