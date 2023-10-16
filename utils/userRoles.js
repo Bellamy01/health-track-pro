@@ -1,10 +1,10 @@
-export enum userRole {
-    ADMIN = 'ADMIN',
-    PATIENT = 'PATIENT',
-    DEFAULT = 'USER'
+const userRole = {
+    ADMIN : 'ADMIN',
+    PATIENT : 'PATIENT',
+    DEFAULT : 'USER'
 }
 
-export const roleValue = (role : string | null) => {
+const roleValue = (role) => {
 
     if (role == null) {
         return true;
@@ -15,3 +15,5 @@ export const roleValue = (role : string | null) => {
         }
     })
 }
+
+module.exports = { userRole, roleValue} ;

@@ -2,10 +2,18 @@ const { v1 } = require('uuid');
 const User = require('../models/userModel');
 const evalidator = require("email-validator");
 const { roleValue } = require("../utils/userRoles");
+const { verify } = require('../utils/jwt');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+
+const signToken = function (id) {
+    return jwt.sign({ id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN,
+    });
+};
 
 exports.register = async (req, res) => {
-    const { name, email, password, passwordConfirm, role, nationalID } = req.body
+    const { name, email, password, passwordConfirm, role, nationalID } = req.body;
     
     if (name.length > 200) {
         return res.status(400).json({
@@ -49,11 +57,35 @@ exports.register = async (req, res) => {
         });
     }
 
+    //verify if user exists
+    const existingUser = await User.findByEmail(email);
+    const naExistingUser = await User.findByNationalID(nationalID);
+
+    if (existingUser || naExistingUser) {
+        if (existingUser && naExistingUser) {
+            return res.status(400).json({
+                status: "error",
+                message: `User with the same email and national ID already exists`
+            });
+        } else if (existingUser) {
+            return res.status(400).json({
+                status: "error",
+                message: `User with the same email already exists`
+            });
+        } else {
+            return res.status(400).json({
+                status: "error",
+                message: `User with the same national ID already exists`
+            });
+        }
+    }
+
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
-
+        const id = v1();
+        const token = signToken(id)
         const newUser = {
-            id: v1(),
+            id,
             name,
             email,
             password: hashedPassword,
@@ -63,12 +95,13 @@ exports.register = async (req, res) => {
     
 
         await User.create(newUser, () => {
-            console.log(`User '${name}' successfully created`);
-
-            return res.status(201).json({
+            res.status(201).json({
                 status: "success",
                 message: "User successfully created!",
-                data: newUser
+                token,
+                data: {
+                    new: newUser
+                }
             });
         })
 
@@ -92,9 +125,7 @@ exports.login = async (req, res, next) => {
     }
 
     try {
-        const user = await User.findByEmail(email, () => {
-            console.log(`User with ${email} found!`);
-        });
+        const user = await User.findByEmail(email);
 
         if (!user) {
             return res.status(400).json({
@@ -102,14 +133,16 @@ exports.login = async (req, res, next) => {
                 message: "User not found!"
             });
         } else {
-            bcrypt.compare(password, user.password).then(() => {
-                return res.status(200).json({
+            const token = signToken(user.id)
+            
+            bcrypt.compare(password, user.password).then((result) => {
+                result ?
+                res.status(200).json({
                     status: "success",
                     message: "Login successful!",
-                    user
-                });
-            }).catch(() => {
-                return res.status(400).json({
+                    token,
+                }) : 
+                res.status(400).json({
                     status: "error",
                     message: "Login failure!",
                 });
@@ -123,3 +156,42 @@ exports.login = async (req, res, next) => {
         });
     }
 }
+
+exports.protect = async (req, res, next) => {
+    //1) Get the token and check its existence
+    try {
+        let token;
+        if (
+        req.headers.authorization &&
+        req.headers.authorization.startsWith('Bearer')
+        ) {
+        token = req.headers.authorization.split(' ')[1];
+        }
+    
+        if (!token) {
+        return res.status(401).json({
+            status: "error",
+            message: "You are not logged in! Please log in to get access.!",
+        });
+        }
+        //2) Verification token
+        const decoded = await verify(token, process.env.JWT_SECRET);
+    
+        //3) Check if user existence
+        const currentUser = await User.findByID(decoded.id);
+        if (!currentUser) {
+            return res.status(401).json({
+                status: "error",
+                message: "The user with this token no longer exists."
+            });
+        }
+        //Grant access to the protected route
+        req.user = currentUser;
+        next();
+    } catch (err) {
+        return res.status(500).json({
+            status: "error",
+            message: err.message
+        }); 
+    }
+};
