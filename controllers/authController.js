@@ -1,10 +1,9 @@
 const { v1 } = require('uuid');
 const User = require('../models/userModel');
-const evalidator = require("email-validator");
-const { roleValue } = require("../utils/userRoles");
 const { verify } = require('../utils/jwt');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { ReqValidator } = require("../utils/validation");
 
 const signToken = function (id) {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -12,50 +11,22 @@ const signToken = function (id) {
     });
 };
 
+const createSendToken = (user, statusCode, res) => {
+    const token = signToken(user.id);
+
+    res.status(statusCode).json({
+      status: 'success',
+      token,
+      data: {
+        user,
+      },
+    });
+};
+
 exports.register = async (req, res) => {
     const { name, email, password, passwordConfirm, role, nationalID } = req.body;
     
-    if (name.length > 200) {
-        return res.status(400).json({
-            status: "error",
-            message: "A user name must be less or equal to 200 characters"
-        });
-    }
-
-    if (password.length < 6) {
-        return res.status(400).json({ 
-            status: "error",
-            message: "Password shouldn't be less than 6 characters" 
-        });
-    }
-
-    if (roleValue(role) == false ) {
-        return res.status(400).json({
-            status: "error",
-            message: "Please provide a valid role(ADMIN,PATIENT)"
-        });
-    }
-
-    if (nationalID.length > 100) {
-        return res.status(400).json({ 
-            status: "error",
-            message: "National ID should be less than 150 characters" 
-        });
-    }
-    
-    if (password !== passwordConfirm) {
-        return res.status(400).json({
-            status: "error",
-            message: "Confirm password must be equal to password"
-        });
-    }
-
-    if (evalidator.validate(email) == false) {
-        return res.status(400).json({
-            status: "error",
-            message: "Please provide a valid email!"
-        });
-    }
+   ReqValidator(name, password, passwordConfirm, role, nationalID, email, res);
 
     //verify if user exists
     const existingUser = await User.findByEmail(email);
@@ -83,7 +54,6 @@ exports.register = async (req, res) => {
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
         const id = v1();
-        const token = signToken(id)
         const newUser = {
             id,
             name,
@@ -95,15 +65,8 @@ exports.register = async (req, res) => {
     
 
         await User.create(newUser, () => {
-            res.status(201).json({
-                status: "success",
-                message: "User successfully created!",
-                token,
-                data: {
-                    new: newUser
-                }
-            });
-        })
+            createSendToken(newUser, 201, res);
+        });
 
     } catch (err) {
         res.status(500).json({
@@ -128,30 +91,24 @@ exports.login = async (req, res, next) => {
         const user = await User.findByEmail(email);
 
         if (!user) {
-            return res.status(400).json({
+            return res.status(404).json({
                 status: "error",
-                message: "User not found!"
+                message: "Incorrect email!"
             });
-        } else {
-            const token = signToken(user.id)
-            
+        } else {            
             bcrypt.compare(password, user.password).then((result) => {
                 result ?
-                res.status(200).json({
-                    status: "success",
-                    message: "Login successful!",
-                    token,
-                }) : 
-                res.status(400).json({
+                createSendToken(user, 200, res) : 
+                res.status(401).json({
                     status: "error",
-                    message: "Login failure!",
+                    message: "Incorrect password!",
                 });
             })
         }
     } catch (err) {
         return res.status(500).json({
             status: "error",
-            message: "Internal server error!",
+            message: "Login failure!",
             error: err.message
         });
     }
@@ -194,4 +151,55 @@ exports.protect = async (req, res, next) => {
             message: err.message
         }); 
     }
+};
+
+exports.restrictTo =
+  (...roles) =>
+  (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+        return res.status(403).json({
+            status: "error",
+            message: "You don't have permission to perform this action"
+        });
+    }
+    next();
+};
+
+exports.updateMyPassword = async (req, res, next) => {
+    const { currentPassword, password, passwordConfirm } = req.body;
+    if (!(currentPassword || password || passwordConfirm)) {
+        return res.status(400).json({
+            status: "error",
+            message: "Please provide full credentials!"
+        });
+    }  
+    if (password.length < 6) {
+        return res.status(400).json({ 
+            status: "error",
+            message: "Password shouldn't be less than 6 characters" 
+        });
+    }  
+    if (password !== passwordConfirm) {
+        return res.status(400).json({
+            status: "error",
+            message: "Confirm password must be equal to password"
+        });
+    }
+    //1) Get user from collection
+    const user = await User.findByID(req.user.id);
+    //2) Check if posted current password is correct and hash the new password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    bcrypt.compare(currentPassword, user.password).then((result) => {
+        result ?    
+        //3) if so , update password
+        User.updatePassword(user.id, hashedPassword, () => {
+            //4) Log in user , send jwt
+            createSendToken(user, 200, res);
+        }) : 
+        res.status(401).json({
+            status: "error",
+            message: "Your current password is wrong!",
+        });
+    });
 };

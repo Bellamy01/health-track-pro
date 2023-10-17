@@ -1,6 +1,7 @@
 const User = require('../models/userModel');
 const { roleValue } = require("../utils/userRoles");
 const evalidator = require("email-validator");
+const { ReqValidator } = require("../utils/validation");
 
 exports.getAllUsers = (req, res) => {
     User.getAll((err, users) => {
@@ -62,72 +63,35 @@ exports.createUser = (req, res) => {
       status: 'error',
       message: 'The route is not defined. Please use /register instead!',
     });
-  };
+};
 
 exports.updateUser = async (req, res) => {
     
-    if (req.body.password || req.body.passwordConfirm) {
-        return res.status(404).json({
-            status: "error",
-            message: "This route is not for password updates. Please use /updateMyPassword!"
-        });
-    }
-
-    const { name, role, email, nationalID } = req.body;
+    const { name, role, email, password, passwordConfirm, nationalID } = req.body;
     const id = req.params.id;
+    
+    ReqValidator(name, password, passwordConfirm, role, nationalID, email, res);
 
     try {
         const user = await User.findByID(id);
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         if (user) {
-            if (name && role && email && nationalID) {
-                if (name.length > 200) {
-                        return res.status(400).json({
-                            status: "error",
-                            message: "A user name must be less or equal to 200 characters"
-                        });
-                    }
-    
-                    if (roleValue(role) == false ) {
-                        return res.status(400).json({
-                            status: "error",
-                            message: "Please provide a valid role(ADMIN,PATIENT)"
-                        });
-                    }
-    
-                    if (nationalID.length > 100) {
-                        return res.status(400).json({ 
-                            status: "error",
-                            message: "National ID should be less than 150 characters" 
-                        });
-                    }
-                    
-                    if (evalidator.validate(email) == false) {
-                        return res.status(400).json({
-                            status: "error",
-                            message: "Please provide a valid email!"
-                        });
-                    }
-    
-                    const updatedUser = {
-                        name,
-                        email,
-                        nationalID,
-                        role
-                    }
-                User.update(id, updatedUser, () => {
-                    res.status(200).json({ 
-                        status: "success",
-                        message: 'User updated successfully', 
-                        data: { update: updatedUser } 
-                    });
-                })
-            } else {
-                res.status(400).json({
-                    status: "error",
-                    message: "User missing attributes!",
-                });   
+            const updatedUser = {
+                name,
+                email,
+                password: hashedPassword,
+                role,
+                nationalID,
             }
+
+            User.updateOne(id, updatedUser, () => {
+                res.status(200).json({ 
+                    status: "success",
+                    message: 'User updated successfully', 
+                    data: { update: updatedUser } 
+                });
+            });
         } else {
             return res.status(404).json({
                 status: "error",
@@ -148,6 +112,7 @@ exports.deleteUser= async (req, res) => {
     
     if (id) {
         const user = await User.findByID(id);
+        
         if (user) {
             User.delete(id, (err) => {
                 if (err) {
@@ -169,5 +134,103 @@ exports.deleteUser= async (req, res) => {
                 message: 'User not found with that ID' 
             });
         }
+    } else {
+        return res.status(404).json({ 
+            status: "error", 
+            message: 'Please provide an ID for retrieval!' 
+        });
     }
 };
+
+exports.getMe = async(req, res, next) => {
+    req.params.id = req.user.id;
+    next();
+}
+
+exports.deleteMe = async (req, res, next) => {
+    req.params.id = req.user.id;
+    next();
+};
+
+exports.updateMe = async (req, res) => {
+
+    if (req.body.password || req.body.passwordConfirm) {
+        return res.status(404).json({
+            status: "error",
+            message: "This route is not for password updates. Please use /updateMyPassword!"
+        });
+    }
+
+    let { name, role, email, nationalID } = req.body;
+    const id = req.user.id;
+
+    try {
+        const user = await User.findByID(id);
+
+        if (user) {
+            if (!name) name = user.name
+            if (!email) email = user.email
+            if (!nationalID) nationalID = user.nationalID
+
+            if (name && email && nationalID) {
+                if (name.length > 200) {
+                        return res.status(401).json({
+                            status: "error",
+                            message: "A user name must be less or equal to 200 characters"
+                        });
+                    }
+    
+                    if (roleValue(role) == false ) {
+                        return res.status(401).json({
+                            status: "error",
+                            message: "Please provide a valid role(ADMIN,PATIENT)"
+                        });
+                    }
+    
+                    if (nationalID.length > 100) {
+                        return res.status(401).json({ 
+                            status: "error",
+                            message: "National ID should be less than 150 characters" 
+                        });
+                    }
+                    
+                    if (evalidator.validate(email) == false) {
+                        return res.status(401).json({
+                            status: "error",
+                            message: "Please provide a valid email!"
+                        });
+                    }
+                    const updatedUser = {
+                        name,
+                        email,
+                        nationalID,
+                        role: role ? role : "USER"
+                    }
+        
+                    User.update(id, updatedUser, () => {
+                        res.status(200).json({ 
+                            status: "success",
+                            message: 'User updated successfully', 
+                            data: { update: updatedUser } 
+                        });
+                    });
+            } else {
+                res.status(401).json({
+                    status: "error",
+                    message: "User missing attributes!",
+                });   
+            }
+        } else {
+            return res.status(404).json({
+                status: "error",
+                message: "User does not exist!"
+            });
+        }
+    } catch (err) {
+        res.status(500).json({
+            status: "error",
+            message: "User not updated",
+            error: err.message,
+        });    
+    }
+}
