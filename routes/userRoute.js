@@ -10,7 +10,7 @@ router.use(protect);
 
 router.route('/updateMyPassword').put(updateMyPassword)
 router.route('/me').get(getMe, getUser);
-router.route('/deleteMe').get(deleteMe, deleteUser);
+router.route('/deleteMe').delete(deleteMe, deleteUser);
 router.route('/updateMe').put(updateMe);
 
 router.use(restrictTo('ADMIN'));

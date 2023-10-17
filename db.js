@@ -15,7 +15,7 @@ db.serialize(() => {
 
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY,
+      id TEXT PRIMARY KEY,
       name TEXT,
       email TEXT UNIQUE,
       password TEXT,
@@ -24,8 +24,18 @@ db.serialize(() => {
     )
   `);
 
+  db.run(`CREATE TABLE IF NOT EXISTS patient_recordings (
+    id TEXT PRIMARY KEY,
+    body_temperature REAL,
+    heart_rate INTEGER,
+    frequent_sickness TEXT,
+    user_id TEXT,
+    createdAt TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`);
+
   // db.run(`DROP TABLE IF EXISTS users`);
-  // db.run(`DROP TABLE IF EXISTS patients`);
+  db.run(`DROP TABLE IF EXISTS patient_recordings`);
 });
 
 module.exports = db;

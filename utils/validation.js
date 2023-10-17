@@ -1,5 +1,6 @@
 const evalidator = require("email-validator");
 const { roleValue } = require("../utils/userRoles");
+const { v1 } = require("uuid");
 
 exports.ReqValidator = (name, password, passwordConfirm, role, nationalID, email, res) => {
     if (name) {
@@ -79,4 +80,43 @@ exports.ReqValidator = (name, password, passwordConfirm, role, nationalID, email
             message: `Please provide a name for the new user!`
         });
     }
+}
+
+exports.PatReqValidator = (body_temperature, heart_rate, frequent_sickness, user_id, res) => {
+    if (body_temperature && heart_rate && frequent_sickness) {
+        if (30 < body_temperature < 40) {
+            if (60 < heart_rate < 200) {
+                if (3 < frequent_sickness.length < 80) {
+                    return {
+                        id: v1(),
+                        body_temperature,
+                        heart_rate,
+                        frequent_sickness,
+                        user_id,
+                        createAt: new Date().toISOString()
+                    }
+                } else {
+                    return res.status(401).json({ 
+                        status: "error", 
+                        message: 'Please provide accurate heart rate (40 - 200)*C !',
+                    });
+                }
+            } else {
+                return res.status(401).json({ 
+                    status: "error", 
+                    message: 'Please provide accurate heart rate (40 - 200)*C !',
+                });
+            }
+        } else {
+            return res.status(401).json({ 
+                status: "error", 
+                message: 'Please provide accurate body temperature (30 - 40)*C !',
+            }); 
+        }
+      } else {
+        return res.status(401).json({ 
+            status: "error", 
+            message: 'Please provide missing attributes!',
+        });
+      }
 }
