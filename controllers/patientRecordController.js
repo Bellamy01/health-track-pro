@@ -113,7 +113,6 @@ exports.updatePatientRecord = async (req, res) => {
             body_temperature,
             heart_rate,
             frequent_sickness,
-            user_id
           }
 
           PatientRecord.update(id, updatedRecord, () => {

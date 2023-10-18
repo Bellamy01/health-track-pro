@@ -35,7 +35,7 @@ db.serialize(() => {
   )`);
 
   // db.run(`DROP TABLE IF EXISTS users`);
-  db.run(`DROP TABLE IF EXISTS patient_recordings`);
+  //db.run(`DROP TABLE IF EXISTS patient_recordings`);
 });
 
 module.exports = db;

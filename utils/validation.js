@@ -93,7 +93,7 @@ exports.PatReqValidator = (body_temperature, heart_rate, frequent_sickness, user
                         heart_rate,
                         frequent_sickness,
                         user_id,
-                        createAt: new Date().toISOString()
+                        createdAt: new Date().toISOString()
                     }
                 } else {
                     return res.status(401).json({ 

@@ -1,14 +1,11 @@
 const express = require('express');
 const body_parser = require('body-parser');
 const userRoutes = require('./routes/userRoute');
-const patientRoutes = require('./routes/patientRoute');
 const patientRecordRoutes = require('./routes/patientRecordRoute');
 
 const app = express();
 
 app.use(body_parser.json())
-
-app.use('/api/v1/patients', patientRoutes);
 
 app.use('/api/v1/users', userRoutes);
 

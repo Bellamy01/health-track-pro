@@ -4,7 +4,7 @@ exports.getAll = (call) => {
     db.all('SELECT * FROM patient_recordings', call);
 }
 exports.getUserRecords = (id, callback) => {
-    db.get('SELECT * FROM patient_recordings WHERE user_id = ?', [id], callback);
+    db.all('SELECT * FROM patient_recordings WHERE user_id = ?', [id], callback);
 }
 exports.create = (patientRecording, callback) => {
     db.run('INSERT INTO patient_recordings (id, body_temperature, heart_rate, frequent_sickness, user_id, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
