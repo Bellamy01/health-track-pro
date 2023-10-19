@@ -1,4 +1,3 @@
-const { v1 } = require("uuid");
 const PatientRecord = require('../models/patientRecordModel');
 const { PatReqValidator } = require("../utils/validation");
 
